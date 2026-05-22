@@ -1,0 +1,55 @@
+name: Build Release APK
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 1.0.0)'
+        required: true
+        default: '1.0.0'
+jobs:
+  build-release:
+    name: Build & Publish Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {java-version: '17', distribution: 'temurin', cache: gradle}
+      - uses: gradle/actions/setup-gradle@v3
+      - run: chmod +x gradlew
+      - name: Determine Version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          else echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT; fi
+      - name: Generate Keystore
+        run: |
+          keytool -genkey -v \
+            -keystore keystore.jks \
+            -alias voicechanger \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass changeit -keypass changeit \
+            -dname "CN=VoiceChanger, OU=Dev, O=VoiceChanger, L=Unknown, S=Unknown, C=US"
+      - env:
+          KEYSTORE_PASSWORD: changeit
+          KEY_ALIAS: voicechanger
+          KEY_PASSWORD: changeit
+        run: ./gradlew assembleRelease --stacktrace
+      - run: |
+          mkdir -p apk
+          cp app/build/outputs/apk/release/app-release.apk "apk/VoiceChanger-v${{ steps.version.outputs.version }}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VoiceChanger-Release
+          path: app/build/outputs/apk/release/app-release.apk
+      - uses: softprops/action-gh-release@v1
+        with:
+          name: "VoiceChanger v${{ steps.version.outputs.version }}"
+          files: apk/VoiceChanger-v${{ steps.version.outputs.version }}.apk
+          tag_name: ${{ github.ref_name || format('v{0}', steps.version.outputs.version) }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
