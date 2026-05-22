@@ -107,7 +107,17 @@ fun VoiceChangerScreen() {
         repeat(maxBars) { amplitudes.add(0.02f) }
     }
 
+    val recordingSamples = remember { mutableStateOf(ShortArray(0)) }
+
     val scrollState = rememberScrollState()
+
+    LaunchedEffect(state.isRecording) {
+        if (!state.isRecording && recordingSeconds > 0) {
+            val samples = engine.stopRecordingSamples()
+            recordingSamples.value = samples
+            recordingSeconds = 0
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -371,8 +381,6 @@ fun VoiceChangerScreen() {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        val recordingSamples = remember { mutableStateOf(ShortArray(0)) }
-
         if (recordingSamples.value.isNotEmpty()) {
             Button(
                 onClick = {
@@ -427,14 +435,6 @@ fun VoiceChangerScreen() {
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-    }
-
-    LaunchedEffect(state.isRecording) {
-        if (!state.isRecording && recordingSeconds > 0) {
-            val samples = engine.stopRecordingSamples()
-            recordingSamples.value = samples
-            recordingSeconds = 0
-        }
     }
 }
 
