@@ -42,8 +42,8 @@ class AudioEngine {
     private var audioRecord: AudioRecord? = null
     private var audioTrack: AudioTrack? = null
     private var processingThread: Thread? = null
-    private var recordingSamples = ShortArray(0)
-    private var recordingWritePos = 0
+    private var rawRecordingSamples = ShortArray(0)
+    private var rawRecordingWritePos = 0
 
     @Volatile
     private var running = false
@@ -58,9 +58,17 @@ class AudioEngine {
     private var robotCounter = 0f
     private var robotRate = 200f
 
+    private fun resetInternalState() {
+        phase = 0f
+        echoBuffer = FloatArray(sampleRate / 2)
+        echoWritePos = 0
+        robotCounter = 0f
+    }
+
     fun start() {
         if (running) return
         running = true
+        resetInternalState()
 
         audioRecord = AudioRecord(
             MediaRecorder.AudioSource.MIC,
@@ -132,8 +140,8 @@ class AudioEngine {
     }
 
     fun startRecordingSamples() {
-        recordingSamples = ShortArray(0)
-        recordingWritePos = 0
+        rawRecordingSamples = ShortArray(0)
+        rawRecordingWritePos = 0
         saveRecording = true
         _state.value = _state.value.copy(isRecording = true)
     }
@@ -141,13 +149,19 @@ class AudioEngine {
     fun stopRecordingSamples(): ShortArray {
         saveRecording = false
         _state.value = _state.value.copy(isRecording = false)
-        return recordingSamples.copyOf()
+        return rawRecordingSamples.copyOfRange(0, rawRecordingWritePos)
+    }
+
+    fun clearRecording() {
+        rawRecordingSamples = ShortArray(0)
+        rawRecordingWritePos = 0
     }
 
     fun recordingByteArray(): ByteArray {
-        val bytes = ByteArray(recordingSamples.size * 2)
-        for (i in recordingSamples.indices) {
-            val sample = recordingSamples[i].toInt()
+        val processed = applyEffectToBuffer(rawRecordingSamples.copyOfRange(0, rawRecordingWritePos), _state.value)
+        val bytes = ByteArray(processed.size * 2)
+        for (i in processed.indices) {
+            val sample = processed[i].toInt()
             bytes[i * 2] = (sample and 0xFF).toByte()
             bytes[i * 2 + 1] = ((sample shr 8) and 0xFF).toByte()
         }
@@ -173,7 +187,8 @@ class AudioEngine {
     }
 
     fun recordingWavBytes(): ByteArray {
-        val numSamples = recordingSamples.size
+        val processed = applyEffectToBuffer(rawRecordingSamples.copyOfRange(0, rawRecordingWritePos), _state.value)
+        val numSamples = processed.size
         val dataSize = numSamples * 2
         val fileSize = 44 + dataSize
 
@@ -193,7 +208,7 @@ class AudioEngine {
         writeInt(buffer, 40, dataSize)
 
         for (i in 0 until numSamples) {
-            val sample = recordingSamples[i].toInt()
+            val sample = processed[i].toInt()
             buffer[44 + i * 2] = (sample and 0xFF).toByte()
             buffer[44 + i * 2 + 1] = ((sample shr 8) and 0xFF).toByte()
         }
@@ -226,76 +241,104 @@ class AudioEngine {
             var maxAmp = 0f
 
             for (i in 0 until readCount) {
-                var sample = inputBuffer[i].toFloat()
+                val rawSample = inputBuffer[i]
+                if (saveRecording) {
+                    if (rawRecordingWritePos >= rawRecordingSamples.size) {
+                        rawRecordingSamples = rawRecordingSamples.copyOf(
+                            maxOf(rawRecordingSamples.size * 2, sampleRate * 60)
+                        )
+                    }
+                    rawRecordingSamples[rawRecordingWritePos++] = rawSample
+                }
+
+                var sample = rawSample.toFloat()
                 val rawAbs = abs(sample)
                 if (rawAbs > maxAmp) maxAmp = rawAbs
 
-                val volume = stateSnapshot.volume
-                val intensity = stateSnapshot.intensity
-                val pitchShift = stateSnapshot.pitchShift
-
-                sample = when (stateSnapshot.effect) {
-                    Effect.NORMAL -> {
-                        sample * volume
-                    }
-                    Effect.CHIPMUNK -> {
-                        applyPitchShift(sample, pitchShift + 5f + intensity * 3f) * volume
-                    }
-                    Effect.DEEP -> {
-                        applyPitchShift(sample, pitchShift - 5f - intensity * 3f) * volume
-                    }
-                    Effect.ROBOT -> {
-                        val mod = sin(2.0 * PI.toFloat() * robotRate / sampleRate * robotCounter).toFloat()
-                        robotCounter += 1f
-                        if (robotCounter >= sampleRate) robotCounter = 0f
-                        val dry = sample * (1f - intensity) * volume
-                        val wet = mod * intensity * 0.5f * volume
-                        clamp(dry + wet)
-                    }
-                    Effect.ECHO -> {
-                        processEcho(sample, intensity, volume)
-                    }
-                    Effect.ALIEN -> {
-                        val mod = sin(2.0 * PI.toFloat() * (80f + intensity * 120f) / sampleRate * robotCounter).toFloat()
-                        robotCounter += 1f
-                        if (robotCounter >= sampleRate) robotCounter = 0f
-                        val pitched = applyPitchShift(sample, 3f + intensity * 4f)
-                        val echoed = processEcho(pitched, intensity * 0.6f, 1f)
-                        (echoed * volume + mod * intensity * 0.3f * volume)
-                    }
-                    Effect.MEGAPHONE -> {
-                        val drive = 1f + intensity * 4f
-                        val saturated = clamp(sample * drive)
-                        saturated * volume * 0.7f
-                    }
-                    Effect.WHISPER -> {
-                        val noise = ((Math.random() * 2.0 - 1.0) * 32767).toFloat()
-                        val wet = noise * intensity * volume * 0.5f
-                        val dry = sample * (1f - intensity) * volume * 0.4f
-                        wet + dry
-                    }
-                }
-
-                sample = clamp(sample)
+                sample = applyEffect(sample, stateSnapshot)
                 outputBuffer[i] = sample.toInt().toShort()
-
-                if (saveRecording) {
-                    if (recordingWritePos >= recordingSamples.size) {
-                        recordingSamples = recordingSamples.copyOf(
-                            maxOf(recordingSamples.size * 2, sampleRate * 60)
-                        )
-                    }
-                    recordingSamples[recordingWritePos++] = sample.toInt().toShort()
-                }
             }
 
-            audioTrack?.write(outputBuffer, 0, readCount)
+            if (!stateSnapshot.isRecording) {
+                audioTrack?.write(outputBuffer, 0, readCount)
+            }
 
             if (maxAmp > 0) {
                 val normalizedAmp = maxAmp / 32767f
                 _state.value = _state.value.copy(amplitude = normalizedAmp)
             }
         }
+    }
+
+    private fun applyEffect(input: Float, stateSnapshot: State): Float {
+        val volume = stateSnapshot.volume
+        val intensity = stateSnapshot.intensity
+        val pitchShift = stateSnapshot.pitchShift
+
+        var result = when (stateSnapshot.effect) {
+            Effect.NORMAL -> {
+                input * volume
+            }
+            Effect.CHIPMUNK -> {
+                applyPitchShift(input, pitchShift + 5f + intensity * 3f) * volume
+            }
+            Effect.DEEP -> {
+                applyPitchShift(input, pitchShift - 5f - intensity * 3f) * volume
+            }
+            Effect.ROBOT -> {
+                val mod = sin(2.0 * PI.toFloat() * robotRate / sampleRate * robotCounter).toFloat()
+                robotCounter += 1f
+                if (robotCounter >= sampleRate) robotCounter = 0f
+                val dry = input * (1f - intensity) * volume
+                val wet = mod * intensity * 0.5f * volume
+                dry + wet
+            }
+            Effect.ECHO -> {
+                processEcho(input, intensity, volume)
+            }
+            Effect.ALIEN -> {
+                val mod = sin(2.0 * PI.toFloat() * (80f + intensity * 120f) / sampleRate * robotCounter).toFloat()
+                robotCounter += 1f
+                if (robotCounter >= sampleRate) robotCounter = 0f
+                val pitched = applyPitchShift(input, 3f + intensity * 4f)
+                val echoed = processEcho(pitched, intensity * 0.6f, 1f)
+                (echoed * volume + mod * intensity * 0.3f * volume)
+            }
+            Effect.MEGAPHONE -> {
+                val drive = 1f + intensity * 4f
+                val saturated = (input * drive).coerceIn(-32767f, 32767f)
+                saturated * volume * 0.7f
+            }
+            Effect.WHISPER -> {
+                val noise = ((Math.random() * 2.0 - 1.0) * 32767).toFloat()
+                val wet = noise * intensity * volume * 0.5f
+                val dry = input * (1f - intensity) * volume * 0.4f
+                wet + dry
+            }
+        }
+        return clamp(result)
+    }
+
+    private fun applyEffectToBuffer(input: ShortArray, stateSnapshot: State): ShortArray {
+        val output = ShortArray(input.size)
+        // Temporary reset for processing
+        val oldPhase = phase
+        val oldEchoBuffer = echoBuffer.copyOf()
+        val oldEchoWritePos = echoWritePos
+        val oldRobotCounter = robotCounter
+
+        resetInternalState()
+        for (i in input.indices) {
+            output[i] = applyEffect(input[i].toFloat(), stateSnapshot).toInt().toShort()
+        }
+
+        // Restore state for real-time
+        phase = oldPhase
+        echoBuffer = oldEchoBuffer
+        echoWritePos = oldEchoWritePos
+        robotCounter = oldRobotCounter
+
+        return output
     }
 
     private fun applyPitchShift(input: Float, semitones: Float): Float {

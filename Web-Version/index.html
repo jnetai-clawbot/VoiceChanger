@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice Changer</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎤</text></svg>">
+  <style>
+    :root {
+      --bg: #0f0f1a;
+      --surface: #1a1a2e;
+      --surface2: #16213e;
+      --accent: #7c3aed;
+      --accent2: #a78bfa;
+      --text: #e2e8f0;
+      --text2: #94a3b8;
+      --danger: #ef4444;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --border: #2d2d4a;
+      --radius: 12px;
+      --shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 700px;
+      background: var(--surface);
+      border-radius: 20px;
+      padding: 32px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    header p {
+      color: var(--text2);
+      margin-top: 6px;
+      font-size: 0.9rem;
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      background: var(--surface2);
+      border-radius: var(--radius);
+      margin-bottom: 24px;
+      font-size: 0.85rem;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--text2);
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    .status-dot.live { background: var(--success); animation: pulse 1.5s infinite; }
+    .status-dot.error { background: var(--danger); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .effect-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .effect-btn {
+      padding: 14px 12px;
+      border: 2px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: all 0.2s;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .effect-btn .icon { font-size: 1.5rem; }
+    .effect-btn:hover { border-color: var(--accent2); background: #1e1b4b; }
+    .effect-btn.active {
+      border-color: var(--accent);
+      background: linear-gradient(135deg, #1e1b4b, #2d1b69);
+      box-shadow: 0 0 16px rgba(124, 58, 237, 0.3);
+    }
+
+    .slider-group {
+      margin-bottom: 20px;
+    }
+
+    .slider-group label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      color: var(--text2);
+      margin-bottom: 6px;
+    }
+
+    .slider-group label span.val {
+      color: var(--accent2);
+      font-weight: 600;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--border);
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      border: 3px solid var(--surface);
+      box-shadow: 0 0 8px rgba(124, 58, 237, 0.4);
+    }
+
+    .controls-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      flex: 1;
+      min-width: 120px;
+    }
+
+    .btn-record {
+      background: var(--danger);
+      color: white;
+    }
+    .btn-record:hover { background: #dc2626; }
+    .btn-record.recording { animation: pulse 1s infinite; }
+
+    .btn-play {
+      background: var(--success);
+      color: white;
+    }
+    .btn-play:hover { background: #16a34a; }
+
+    .btn-stop {
+      background: var(--surface2);
+      color: var(--text);
+      border: 2px solid var(--border);
+    }
+    .btn-stop:hover { background: #1e293b; }
+
+    .btn-download {
+      background: var(--accent);
+      color: white;
+    }
+    .btn-download:hover { background: #6d28d9; }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .visualizer-container {
+      width: 100%;
+      height: 100px;
+      background: var(--surface2);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    canvas#visualizer {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .record-info {
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text2);
+      margin-bottom: 16px;
+      min-height: 24px;
+    }
+
+    .record-info .timer { font-variant-numeric: tabular-nums; color: var(--accent2); font-weight: 600; }
+
+    .preset-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      background: var(--surface2);
+      border-radius: 20px;
+      font-size: 0.75rem;
+      color: var(--accent2);
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🎤 Voice Changer</h1>
+      <p>Real-time voice effects powered by Web Audio API</p>
+    </header>
+
+    <div class="status-bar">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Click Allow Microphone to start</span>
+    </div>
+
+    <div class="visualizer-container">
+      <canvas id="visualizer"></canvas>
+    </div>
+
+    <div class="controls-row">
+      <button class="btn btn-record" id="btnMic" onclick="toggleMic()">🎙 Allow Microphone</button>
+      <button class="btn btn-record" id="btnRecord" onclick="toggleRecord()" disabled>⏺ Record</button>
+      <button class="btn btn-play" id="btnPlay" onclick="playRecording()" disabled>▶ Play Back</button>
+    </div>
+
+    <div class="record-info" id="recordInfo"></div>
+
+    <div style="margin-bottom: 8px; font-size: 0.85rem; color: var(--text2);">Preset Effects</div>
+    <div class="effect-grid">
+      <div class="effect-btn active" data-effect="normal" onclick="setEffect('normal', this)">
+        <span class="icon">🎙</span> Normal
+      </div>
+      <div class="effect-btn" data-effect="chipmunk" onclick="setEffect('chipmunk', this)">
+        <span class="icon">🐿</span> Chipmunk
+      </div>
+      <div class="effect-btn" data-effect="deep" onclick="setEffect('deep', this)">
+        <span class="icon">👹</span> Deep
+      </div>
+      <div class="effect-btn" data-effect="robot" onclick="setEffect('robot', this)">
+        <span class="icon">🤖</span> Robot
+      </div>
+      <div class="effect-btn" data-effect="echo" onclick="setEffect('echo', this)">
+        <span class="icon">🏔</span> Echo
+      </div>
+      <div class="effect-btn" data-effect="alien" onclick="setEffect('alien', this)">
+        <span class="icon">👽</span> Alien
+      </div>
+      <div class="effect-btn" data-effect="megaphone" onclick="setEffect('megaphone', this)">
+        <span class="icon">📢</span> Megaphone
+      </div>
+      <div class="effect-btn" data-effect="whisper" onclick="setEffect('whisper', this)">
+        <span class="icon">🤫</span> Whisper
+      </div>
+    </div>
+
+    <div class="slider-group">
+      <label>Pitch Shift <span class="val" id="pitchVal">0 semitones</span></label>
+      <input type="range" id="pitchSlider" min="-12" max="12" value="0" step="1" oninput="updatePitch(this.value)">
+    </div>
+
+    <div class="slider-group">
+      <label>Effect Intensity <span class="val" id="intensityVal">50%</span></label>
+      <input type="range" id="intensitySlider" min="0" max="100" value="50" oninput="updateIntensity(this.value)">
+    </div>
+
+    <div class="slider-group">
+      <label>Volume <span class="val" id="volumeVal">80%</span></label>
+      <input type="range" id="volumeSlider" min="0" max="100" value="80" oninput="updateVolume(this.value)">
+    </div>
+
+    <div class="controls-row">
+      <button class="btn btn-download" id="btnDownload" onclick="downloadRecording()" disabled>💾 Save Recording</button>
+    </div>
+
+    <div class="preset-badge" id="presetBadge">Active: Normal</div>
+  </div>
+
+  <script>
+    let audioContext = null;
+    let micStream = null;
+    let micSource = null;
+    let analyser = null;
+    let pitchShifter = null;
+    let currentEffect = 'normal';
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let recordingBlob = null;
+    let micActive = false;
+    let isRecording = false;
+
+    const canvas = document.getElementById('visualizer');
+    const ctx = canvas.getContext('2d');
+    let animFrame;
+
+    const effectPresets = {
+      normal: { pitch: 0, name: 'Normal' },
+      chipmunk: { pitch: 7, name: 'Chipmunk' },
+      deep: { pitch: -7, name: 'Deep' },
+      robot: { pitch: 0, name: 'Robot' },
+      echo: { pitch: 0, name: 'Echo' },
+      alien: { pitch: 5, name: 'Alien' },
+      megaphone: { pitch: 2, name: 'Megaphone' },
+      whisper: { pitch: -2, name: 'Whisper' }
+    };
+
+    function setStatus(text, live) {
+      document.getElementById('statusText').textContent = text;
+      const dot = document.getElementById('statusDot');
+      dot.className = 'status-dot';
+      if (live) dot.classList.add('live');
+    }
+
+    function resizeCanvas() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width * devicePixelRatio;
+      canvas.height = rect.height * devicePixelRatio;
+      ctx.scale(devicePixelRatio, devicePixelRatio);
+    }
+
+    function draw() {
+      if (!analyser) {
+        animFrame = requestAnimationFrame(draw);
+        return;
+      }
+      resizeCanvas();
+      const w = canvas.width / devicePixelRatio;
+      const h = canvas.height / devicePixelRatio;
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      ctx.clearRect(0, 0, w, h);
+
+      analyser.getByteFrequencyData(dataArray);
+      const barWidth = (w / bufferLength) * 2;
+      const gradient = ctx.createLinearGradient(0, h, 0, 0);
+      gradient.addColorStop(0, '#7c3aed');
+      gradient.addColorStop(0.5, '#a78bfa');
+      gradient.addColorStop(1, '#c4b5fd');
+
+      for (let i = 0; i < bufferLength; i++) {
+        const barHeight = (dataArray[i] / 255) * h * 0.9;
+        const x = i * barWidth;
+        ctx.fillStyle = gradient;
+        ctx.fillRect(x, h - barHeight, barWidth - 1, barHeight);
+      }
+
+      animFrame = requestAnimationFrame(draw);
+    }
+
+    async function toggleMic() {
+      if (micActive) {
+        stopMic();
+        return;
+      }
+
+      try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        micSource = audioContext.createMediaStreamSource(micStream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        micSource.connect(analyser);
+
+        pitchShifter = new PitchShiftNode(audioContext);
+
+        micSource.connect(pitchShifter.input);
+        pitchShifter.output.connect(audioContext.destination);
+
+        micActive = true;
+        document.getElementById('btnMic').textContent = '🔇 Mute';
+        document.getElementById('btnRecord').disabled = false;
+        setStatus('Microphone active — speak to test!', true);
+        applyEffectSettings();
+        resizeCanvas();
+        draw();
+      } catch (err) {
+        console.error(err);
+        setStatus('Microphone access denied or unavailable', false);
+        document.getElementById('statusDot').classList.add('error');
+      }
+    }
+
+    function stopMic() {
+      if (micStream) {
+        micStream.getTracks().forEach(t => t.stop());
+        micStream = null;
+      }
+      if (audioContext) {
+        audioContext.close();
+        audioContext = null;
+      }
+      micSource = null;
+      analyser = null;
+      pitchShifter = null;
+      micActive = false;
+      cancelAnimationFrame(animFrame);
+      document.getElementById('btnMic').textContent = '🎙 Allow Microphone';
+      document.getElementById('btnRecord').disabled = true;
+      document.getElementById('btnPlay').disabled = true;
+      setStatus('Click Allow Microphone to start', false);
+    }
+
+    function setEffect(effect, el) {
+      currentEffect = effect;
+      document.querySelectorAll('.effect-btn').forEach(b => b.classList.remove('active'));
+      if (el) el.classList.add('active');
+      document.getElementById('presetBadge').textContent = `Active: ${effectPresets[effect].name}`;
+
+      const presetPitch = effectPresets[effect].pitch;
+      document.getElementById('pitchSlider').value = presetPitch;
+      document.getElementById('pitchVal').textContent = `${presetPitch > 0 ? '+' : ''}${presetPitch} semitones`;
+
+      let intensity = 50;
+      if (effect === 'robot') intensity = 10;
+      if (effect === 'megaphone') intensity = 80;
+      if (effect === 'whisper') intensity = 30;
+      document.getElementById('intensitySlider').value = intensity;
+      document.getElementById('intensityVal').textContent = `${intensity}%`;
+
+      applyEffectSettings();
+    }
+
+    function updatePitch(val) {
+      document.getElementById('pitchVal').textContent = `${parseInt(val) > 0 ? '+' : ''}${val} semitones`;
+      applyEffectSettings();
+    }
+
+    function updateIntensity(val) {
+      document.getElementById('intensityVal').textContent = `${val}%`;
+      applyEffectSettings();
+    }
+
+    function updateVolume(val) {
+      document.getElementById('volumeVal').textContent = `${val}%`;
+      applyEffectSettings();
+    }
+
+    function applyEffectSettings() {
+      if (!pitchShifter) return;
+      const pitch = parseInt(document.getElementById('pitchSlider').value);
+      const intensity = parseInt(document.getElementById('intensitySlider').value) / 100;
+      const volume = parseInt(document.getElementById('volumeSlider').value) / 100;
+
+      pitchShifter.setPitch(pitch);
+      pitchShifter.setVolume(volume);
+
+      if (currentEffect === 'robot') {
+        pitchShifter.setRobot(true, intensity);
+        pitchShifter.setEcho(false, 0);
+      } else if (currentEffect === 'echo') {
+        pitchShifter.setEcho(true, intensity);
+        pitchShifter.setRobot(false, 0);
+      } else if (currentEffect === 'megaphone') {
+        pitchShifter.setDistortion(intensity);
+        pitchShifter.setEcho(false, 0);
+        pitchShifter.setRobot(false, 0);
+      } else if (currentEffect === 'whisper') {
+        pitchShifter.setWhisper(true, intensity);
+        pitchShifter.setEcho(false, 0);
+        pitchShifter.setRobot(false, 0);
+      } else if (currentEffect === 'alien') {
+        pitchShifter.setAlien(true, intensity);
+        pitchShifter.setEcho(true, intensity * 0.5);
+        pitchShifter.setRobot(false, 0);
+      } else {
+        pitchShifter.setRobot(false, 0);
+        pitchShifter.setEcho(false, 0);
+        pitchShifter.setDistortion(0);
+        pitchShifter.setWhisper(false, 0);
+        pitchShifter.setAlien(false, 0);
+      }
+    }
+
+    function toggleRecord() {
+      if (isRecording) {
+        stopRecording();
+      } else {
+        startRecording();
+      }
+    }
+
+    async function startRecording() {
+      if (!micActive) return;
+
+      const dest = audioContext.createMediaStreamDestination();
+      pitchShifter.output.connect(dest);
+
+      recordedChunks = [];
+      mediaRecorder = new MediaRecorder(dest.stream, { mimeType: 'audio/webm;codecs=opus' });
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+      mediaRecorder.onstop = () => {
+        recordingBlob = new Blob(recordedChunks, { type: 'audio/webm' });
+        document.getElementById('btnPlay').disabled = false;
+        document.getElementById('btnDownload').disabled = false;
+        document.getElementById('recordInfo').innerHTML = 'Recording saved!';
+        pitchShifter.output.disconnect(dest);
+      };
+
+      mediaRecorder.start();
+      isRecording = true;
+      document.getElementById('btnRecord').textContent = '⏹ Stop Recording';
+      document.getElementById('btnRecord').classList.add('recording');
+      document.getElementById('recordInfo').innerHTML = '<span style="color:#ef4444;">●</span> Recording... <span class="timer">00:00</span>';
+      document.getElementById('btnDownload').disabled = true;
+
+      let sec = 0;
+      window._recordTimer = setInterval(() => {
+        sec++;
+        const m = String(Math.floor(sec / 60)).padStart(2, '0');
+        const s = String(sec % 60).padStart(2, '0');
+        document.getElementById('recordInfo').innerHTML = `<span style="color:#ef4444;">●</span> Recording... <span class="timer">${m}:${s}</span>`;
+      }, 1000);
+    }
+
+    function stopRecording() {
+      if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+      mediaRecorder.stop();
+      isRecording = false;
+      clearInterval(window._recordTimer);
+      document.getElementById('btnRecord').textContent = '⏺ Record';
+      document.getElementById('btnRecord').classList.remove('recording');
+    }
+
+    function playRecording() {
+      if (!recordingBlob) return;
+      const url = URL.createObjectURL(recordingBlob);
+      const audio = new Audio(url);
+      audio.play();
+    }
+
+    function downloadRecording() {
+      if (!recordingBlob) return;
+      const url = URL.createObjectURL(recordingBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `voice-changer-${effectPresets[currentEffect].name.toLowerCase()}-${Date.now()}.webm`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    resizeCanvas();
+    draw();
+
+    class PitchShiftNode {
+      constructor(ctx) {
+        this.ctx = ctx;
+        this.input = ctx.createGain();
+        this.output = ctx.createGain();
+        this._pitchFactor = 1.0;
+        this._wetGain = ctx.createGain();
+        this._dryGain = ctx.createGain();
+        this._robotGain = ctx.createGain();
+        this._echoGain = ctx.createGain();
+        this._distortion = null;
+        this._whisperGain = ctx.createGain();
+        this._alienOsc = null;
+
+        const delayTime = 0.03;
+        this._delayNode = ctx.createDelay(0.1);
+        this._delayNode.delayTime.value = delayTime;
+
+        this._oscNode = ctx.createOscillator();
+        this._oscNode.frequency.value = 80;
+        this._oscNode.type = 'sawtooth';
+        this._oscNode.start();
+        this._oscNodeGain = ctx.createGain();
+        this._oscNodeGain.gain.value = 0;
+        this._oscNode.connect(this._oscNodeGain);
+
+        this._echoDelay = ctx.createDelay(0.6);
+        this._echoDelay.delayTime.value = 0.35;
+        this._echoFB = ctx.createGain();
+        this._echoFB.gain.value = 0;
+        this._echoDelay.connect(this._echoFB);
+        this._echoFB.connect(this._echoDelay);
+
+        this._merger = ctx.createGain();
+        this._dryGain.gain.value = 0.4;
+        this._wetGain.gain.value = 0.6;
+        this._robotGain.gain.value = 0;
+        this._echoGain.gain.value = 0;
+        this._whisperGain.gain.value = 0;
+
+        const whisperOsc = ctx.createOscillator();
+        whisperOsc.frequency.value = 0.5;
+        whisperOsc.type = 'sine';
+        whisperOsc.start();
+        const whisperMod = ctx.createGain();
+        whisperMod.gain.value = 0;
+        whisperOsc.connect(whisperMod);
+        whisperMod.connect(this._whisperGain.gain);
+
+        this._dryGain.connect(this._merger);
+        this._wetGain.connect(this._merger);
+        this._robotGain.connect(this._merger);
+        this._echoGain.connect(this._merger);
+        this._whisperGain.connect(this._merger);
+
+        this._echoDelay.connect(this._echoGain);
+        this._oscNodeGain.connect(this._robotGain);
+
+        this._merger.connect(this.output);
+        this._connection = null;
+        this._connected = false;
+        this._volumeGain = ctx.createGain();
+        this._volumeGain.gain.value = 0.8;
+        this._merger.connect(this._volumeGain);
+      }
+
+      _connect() {
+        if (this._connected) return;
+        this._connection = this.input;
+        this._connection.connect(this._wetGain);
+        this._connection.connect(this._dryGain);
+        this._connection.connect(this._echoDelay);
+        this._connection.connect(this._robotGain);
+        this._connection.connect(this._whisperGain);
+        this._connected = true;
+      }
+
+      setPitch(semitones) {
+        this._connect();
+        const factor = Math.pow(2, semitones / 12);
+        this._pitchFactor = factor;
+
+        let delayTime = 0.01;
+        if (factor > 1) delayTime = 0.01 / factor;
+        else if (factor < 1) delayTime = 0.01 * (1 / factor);
+        this._delayNode.delayTime.value = Math.max(0.002, Math.min(0.1, delayTime));
+
+        const modFreq = Math.abs(semitones) * 8 + 10;
+        this._oscNode.frequency.value = modFreq;
+        const modDepth = Math.min(1, Math.abs(semitones) * 0.06);
+        this._oscNodeGain.gain.value = modDepth * 0.015;
+      }
+
+      setVolume(v) { this._volumeGain.gain.value = Math.max(0, Math.min(1, v)); }
+
+      setRobot(on, intensity) {
+        this._connect();
+        this._robotGain.gain.value = on ? intensity * 0.6 : 0;
+        if (on) {
+          this._oscNode.frequency.value = 60 + intensity * 40;
+          this._oscNodeGain.gain.value = intensity * 0.02;
+          this._dryGain.gain.value = (1 - intensity) * 0.4;
+        } else {
+          this._dryGain.gain.value = 0.4;
+        }
+      }
+
+      setEcho(on, intensity) {
+        this._connect();
+        this._echoFB.gain.value = on ? intensity * 0.6 : 0;
+        this._echoGain.gain.value = on ? intensity * 0.5 : 0;
+        this._echoDelay.delayTime.value = 0.2 + intensity * 0.3;
+      }
+
+      setDistortion(intensity) {
+        this._connect();
+        this.input.gain.value = 1 + intensity * 3;
+      }
+
+      setWhisper(on, intensity) {
+        this._connect();
+        this._whisperGain.gain.value = on ? intensity * 0.5 : 0;
+        if (on) {
+          this._dryGain.gain.value = (1 - intensity) * 0.3;
+          this._wetGain.gain.value = 0.6;
+        } else {
+          this._dryGain.gain.value = 0.4;
+          this._wetGain.gain.value = 0.6;
+        }
+      }
+
+      setAlien(on, intensity) {
+        this.setRobot(on, intensity * 0.5);
+        this._oscNode.frequency.value = 20 + intensity * 100;
+        this._wetGain.gain.value = 0.3 + intensity * 0.4;
+      }
+    }
+  </script>
+</body>
+</html>

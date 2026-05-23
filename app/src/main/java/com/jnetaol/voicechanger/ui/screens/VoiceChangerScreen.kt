@@ -419,6 +419,24 @@ fun VoiceChangerScreen() {
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Save Recording", fontWeight = FontWeight.SemiBold)
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Button(
+                onClick = {
+                    engine.clearRecording()
+                    recordingSamples.value = ShortArray(0)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Danger.copy(alpha = 0.8f)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.Delete, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Clear Recording", fontWeight = FontWeight.SemiBold)
+            }
         }
 
         if (state.isRunning && !state.isRecording && recordingSamples.value.isEmpty()) {
@@ -434,7 +452,7 @@ fun VoiceChangerScreen() {
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(80.dp))
     }
 }
 

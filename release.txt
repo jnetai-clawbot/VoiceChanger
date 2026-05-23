@@ -1,0 +1,14 @@
+
+VoieChanger app
+
+Project location /home/jay/Documents/Scripts/AI/Gemini/VoiceChangerApp
+
+release an update to github using credentials found in /home/jay/Documents/Scripts/AI/Gemini/password-vault
+
+github link https://github.com/jnetai-clawbot/VoiceChanger
+
+release a new apk called VoiceChanger.apk via github workflows
+
+tell me when released and ready to test
+
+

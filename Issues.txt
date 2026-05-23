@@ -1,0 +1,26 @@
+
+VoieChanger app
+
+issues:
+
+when recording dont output any audio as it will feedback!
+
+add a "Clear Recording" button so it can remove the temporary recorded audio!
+
+allow more space at bottom when scrolling so i can see buttons properly atr the bottom of the app
+
+make the effects work for playback and saving of the audio when play / saved button poressed correctly!
+
+https://github.com/jnetai-clawbot/VoiceChanger
+
+Project location /home/jay/Documents/Scripts/AI/Gemini/VoiceChangerApp
+
+release an update to github using credentials found in /home/jay/Documents/Scripts/AI/Gemini/password-vault
+
+github link https://github.com/jnetai-clawbot/VoiceChanger
+
+release a new apk called VoiceChanger.apk via github workflows
+
+tell me when released and ready to test
+
+
