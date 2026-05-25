@@ -40,7 +40,6 @@ jobs:
         run: ./gradlew assembleRelease --stacktrace
       - run: |
           mkdir -p apk
-          cp app/build/outputs/apk/release/app-release.apk "apk/VoiceChanger-v${{ steps.version.outputs.version }}.apk"
           cp app/build/outputs/apk/release/app-release.apk "apk/VoiceChanger.apk"
       - uses: actions/upload-artifact@v4
         with:
@@ -49,9 +48,7 @@ jobs:
       - uses: softprops/action-gh-release@v1
         with:
           name: "VoiceChanger v${{ steps.version.outputs.version }}"
-          files: |
-            apk/VoiceChanger-v${{ steps.version.outputs.version }}.apk
-            apk/VoiceChanger.apk
+          files: apk/VoiceChanger.apk
           tag_name: ${{ github.ref_name || format('v{0}', steps.version.outputs.version) }}
           generate_release_notes: true
         env:

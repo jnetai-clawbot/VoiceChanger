@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.jnetaol.voicechanger.AppDebug
 import com.jnetaol.voicechanger.engine.AudioEngine
 import com.jnetaol.voicechanger.ui.theme.*
 import kotlinx.coroutines.delay
@@ -450,6 +451,55 @@ fun VoiceChangerScreen() {
                     .padding(horizontal = 12.dp, vertical = 6.dp)
                     .padding(top = 8.dp)
             )
+        }
+
+        // Debug / Error Log Viewer
+        if (AppDebug.hasErrors()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            var showErrors by remember { mutableStateOf(false) }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Danger.copy(alpha = 0.15f))
+                    .border(1.dp, Danger.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                    .clickable { showErrors = !showErrors }
+                    .padding(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = Danger,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "${AppDebug.getErrorLog().size} error(s) detected — tap to view",
+                        color = Danger,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                if (showErrors) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalDivider(color = Danger.copy(alpha = 0.3f))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    AppDebug.getErrorLog().forEach { err ->
+                        Text(
+                            text = err,
+                            color = TextSecondary,
+                            fontSize = 10.sp,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            modifier = Modifier.padding(vertical = 2.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    TextButton(onClick = { AppDebug.clearLog() }) {
+                        Text("Clear Log", color = Accent, fontSize = 12.sp)
+                    }
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(80.dp))

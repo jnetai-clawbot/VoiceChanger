@@ -5,6 +5,7 @@ import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
+import com.jnetaol.voicechanger.AppDebug
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.PI
@@ -70,34 +71,64 @@ class AudioEngine {
         running = true
         resetInternalState()
 
-        audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
-            sampleRate,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            bufferSize
-        )
+        try {
+            audioRecord = AudioRecord(
+                MediaRecorder.AudioSource.MIC,
+                sampleRate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                bufferSize
+            )
 
-        audioTrack = AudioTrack(
-            AudioManager.STREAM_MUSIC,
-            sampleRate,
-            AudioFormat.CHANNEL_OUT_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            bufferSize,
-            AudioTrack.MODE_STREAM
-        )
+            if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
+                AppDebug.error("AudioEngine", "AudioRecord failed to initialize (state=${audioRecord?.state})")
+                running = false
+                _state.value = _state.value.copy(isRunning = false)
+                return
+            }
 
-        audioRecord?.startRecording()
-        audioTrack?.play()
+            audioTrack = AudioTrack(
+                AudioManager.STREAM_MUSIC,
+                sampleRate,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                bufferSize,
+                AudioTrack.MODE_STREAM
+            )
 
-        processingThread = Thread {
-            processAudio()
-        }.apply {
-            priority = Thread.MAX_PRIORITY
-            start()
+            if (audioTrack?.state != AudioTrack.STATE_INITIALIZED) {
+                AppDebug.error("AudioEngine", "AudioTrack failed to initialize (state=${audioTrack?.state})")
+                audioRecord?.release()
+                audioRecord = null
+                running = false
+                _state.value = _state.value.copy(isRunning = false)
+                return
+            }
+
+            audioRecord?.startRecording()
+            if (audioRecord?.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                AppDebug.error("AudioEngine", "AudioRecord failed to start recording")
+            }
+
+            audioTrack?.play()
+            if (audioTrack?.playState != AudioTrack.PLAYSTATE_PLAYING) {
+                AppDebug.error("AudioEngine", "AudioTrack failed to start playing")
+            }
+
+            processingThread = Thread {
+                processAudio()
+            }.apply {
+                priority = Thread.MAX_PRIORITY
+                start()
+            }
+
+            _state.value = _state.value.copy(isRunning = true)
+            AppDebug.log("AudioEngine", "Engine started OK")
+        } catch (e: Exception) {
+            AppDebug.error("AudioEngine", "Failed to start audio engine", e)
+            running = false
+            _state.value = _state.value.copy(isRunning = false)
         }
-
-        _state.value = _state.value.copy(isRunning = true)
     }
 
     fun stop() {
@@ -232,42 +263,58 @@ class AudioEngine {
         val inputBuffer = ShortArray(bufferSize)
         val outputBuffer = ShortArray(bufferSize)
 
+        AppDebug.log("AudioEngine", "Processing thread started")
+
         while (running) {
-            val stateSnapshot = _state.value
-            val readCount = audioRecord?.read(inputBuffer, 0, bufferSize) ?: break
+            try {
+                val stateSnapshot = _state.value
+                val record = audioRecord ?: break
+                val readCount = record.read(inputBuffer, 0, bufferSize)
 
-            if (readCount <= 0) continue
-
-            var maxAmp = 0f
-
-            for (i in 0 until readCount) {
-                val rawSample = inputBuffer[i]
-                if (saveRecording) {
-                    if (rawRecordingWritePos >= rawRecordingSamples.size) {
-                        rawRecordingSamples = rawRecordingSamples.copyOf(
-                            maxOf(rawRecordingSamples.size * 2, sampleRate * 60)
-                        )
-                    }
-                    rawRecordingSamples[rawRecordingWritePos++] = rawSample
+                if (readCount <= 0) {
+                    Thread.sleep(1)
+                    continue
                 }
 
-                var sample = rawSample.toFloat()
-                val rawAbs = abs(sample)
-                if (rawAbs > maxAmp) maxAmp = rawAbs
+                var maxAmp = 0f
 
-                sample = applyEffect(sample, stateSnapshot)
-                outputBuffer[i] = sample.toInt().toShort()
-            }
+                for (i in 0 until readCount) {
+                    val rawSample = inputBuffer[i]
+                    if (saveRecording) {
+                        if (rawRecordingWritePos >= rawRecordingSamples.size) {
+                            rawRecordingSamples = rawRecordingSamples.copyOf(
+                                maxOf(rawRecordingSamples.size * 2, sampleRate * 60)
+                            )
+                        }
+                        rawRecordingSamples[rawRecordingWritePos++] = rawSample
+                    }
 
-            if (!stateSnapshot.isRecording) {
-                audioTrack?.write(outputBuffer, 0, readCount)
-            }
+                    var sample = rawSample.toFloat()
+                    val rawAbs = abs(sample)
+                    if (rawAbs > maxAmp) maxAmp = rawAbs
 
-            if (maxAmp > 0) {
-                val normalizedAmp = maxAmp / 32767f
-                _state.value = _state.value.copy(amplitude = normalizedAmp)
+                    sample = applyEffect(sample, stateSnapshot)
+                    outputBuffer[i] = sample.toInt().toShort()
+                }
+
+                if (!stateSnapshot.isRecording) {
+                    try {
+                        audioTrack?.write(outputBuffer, 0, readCount)
+                    } catch (e: Exception) {
+                        AppDebug.error("AudioEngine", "AudioTrack write failed", e)
+                    }
+                }
+
+                if (maxAmp > 0) {
+                    val normalizedAmp = maxAmp / 32767f
+                    _state.value = _state.value.copy(amplitude = normalizedAmp)
+                }
+            } catch (e: Exception) {
+                AppDebug.error("AudioEngine", "Processing loop error", e)
             }
         }
+
+        AppDebug.log("AudioEngine", "Processing thread stopped")
     }
 
     private fun applyEffect(input: Float, stateSnapshot: State): Float {
