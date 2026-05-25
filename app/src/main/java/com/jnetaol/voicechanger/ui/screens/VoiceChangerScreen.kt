@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -483,14 +484,19 @@ fun VoiceChangerScreen() {
                 }
                 if (showErrors) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    HorizontalDivider(color = Danger.copy(alpha = 0.3f))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(Danger.copy(alpha = 0.3f))
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
                     AppDebug.getErrorLog().forEach { err ->
                         Text(
                             text = err,
                             color = TextSecondary,
                             fontSize = 10.sp,
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontFamily = FontFamily.Monospace,
                             modifier = Modifier.padding(vertical = 2.dp)
                         )
                     }
